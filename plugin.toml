@@ -1,0 +1,23 @@
+# LFM25AudioOnnxNode as a standalone Path 3 cdylib plugin.
+#
+# Rust-native ONNX streaming wrapper for LiquidAI LFM2.5 Audio —
+# multi-graph decoder + depthformer + detokenizer (+ optional ISTFT)
+# loop that emits interleaved text/audio across the dlopen boundary.
+#
+# Consumer manifest reference:
+#
+#   "plugins": ["lfm25-audio-onnx@v0.1.0"]
+#       (canonical-org shorthand → github.com/RemoteMedia-SDK/lfm25-audio-onnx)
+#
+#   "plugins": ["./plugins/liblfm25_audio_onnx_plugin.so"]
+#       (local path)
+
+[plugin]
+name        = "lfm25-audio-onnx"
+version     = "0.1.0"
+language    = "rust"
+description = "LFM2.5 audio (Liquid Foundation Model 2 / audio variant) — ONNX streaming node, standalone Rust cdylib plugin"
+
+[rust]
+node_types    = ["LFM25AudioOnnxNode"]
+asset_pattern = "lib{name}-{arch}-{os}.{ext}"
