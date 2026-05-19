@@ -14,7 +14,7 @@
 
 [plugin]
 name        = "lfm25-audio-onnx"
-version     = "0.1.0"
+version     = "0.2.0"
 language    = "rust"
 description = "LFM2.5 audio (Liquid Foundation Model 2 / audio variant) — ONNX streaming node, standalone Rust cdylib plugin"
 
