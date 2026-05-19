@@ -2019,41 +2019,104 @@ impl LFM25AudioOnnxNode {
         session_id.unwrap_or_else(|| "default".to_string())
     }
 
+    /// Strip the optional `[0x00][len:u8][channel_name]` channel tag
+    /// that `RuntimeData::Text` may carry. Mirrors `split_text_str` in
+    /// `remotemedia-types` but inlined so this Path-3 plugin doesn't
+    /// have to link `remotemedia-core`. Untagged text passes through.
+    fn strip_text_channel(s: &str) -> &str {
+        let bytes = s.as_bytes();
+        if bytes.first() == Some(&0u8) && bytes.len() >= 2 {
+            let chan_len = bytes[1] as usize;
+            let body_start = 2 + chan_len;
+            if body_start <= bytes.len() {
+                if let Ok(rest) = std::str::from_utf8(&bytes[body_start..]) {
+                    return rest;
+                }
+            }
+        }
+        s
+    }
+
+    /// Extract aux-port envelope (port + payload) from a RuntimeData,
+    /// accepting both on-the-wire shapes the SDK supports:
+    ///   - `RuntimeData::Json({"__aux_port__": "<port>", "payload": ...})`
+    ///     — canonical Rust form produced by `wrap_aux_port()`.
+    ///   - `RuntimeData::Text("[channel-tag]{...}")` — JSON-as-text, the
+    ///     shape Python clients ship via `Data.from_text(json.dumps(...))`
+    ///     and the multiprocess runner uses for typed-RPC frames.
+    /// Returns `None` if the data is not an aux envelope.
+    fn extract_aux_envelope(data: &RuntimeData) -> Option<(String, Value)> {
+        match data {
+            RuntimeData::Json(v) => {
+                let port = v.get(AUX_PORT_ENVELOPE_KEY).and_then(Value::as_str)?;
+                let payload = v.get("payload").cloned().unwrap_or(Value::Null);
+                Some((port.to_string(), payload))
+            }
+            RuntimeData::Text(s) => {
+                let body = Self::strip_text_channel(s);
+                let trimmed = body.trim_start();
+                if !trimmed.starts_with('{') {
+                    return None;
+                }
+                let v: Value = serde_json::from_str(trimmed).ok()?;
+                let port = v.get(AUX_PORT_ENVELOPE_KEY).and_then(Value::as_str)?;
+                let payload = v.get("payload").cloned().unwrap_or(Value::Null);
+                Some((port.to_string(), payload))
+            }
+            _ => None,
+        }
+    }
+
+    /// Pull a single string from the payload, supporting both shapes:
+    ///   - Legacy raw envelope: `payload = {"text": "<docs>"}` —
+    ///     produced by `wrap_aux_port(port, RuntimeData::Text(t))`.
+    ///   - Typed-RPC envelope:  `payload = {"args": ["<docs>"], "kwargs": {...}}`
+    ///     — produced by clients emitting `@rpc` method-call frames.
+    /// Returns the first non-empty string found, or "" if neither key
+    /// holds a usable string.
+    fn payload_string(payload: &Value) -> String {
+        if let Some(s) = payload.get("text").and_then(Value::as_str) {
+            return s.to_string();
+        }
+        if let Some(arr) = payload.get("args").and_then(Value::as_array) {
+            if let Some(s) = arr.first().and_then(Value::as_str) {
+                return s.to_string();
+            }
+        }
+        String::new()
+    }
+
     fn handle_aux(&self, data: &RuntimeData) -> L25Result<bool> {
-        let RuntimeData::Json(value) = data else {
+        let Some((port, payload)) = Self::extract_aux_envelope(data) else {
             return Ok(false);
         };
-        let Some(port) = value.get(AUX_PORT_ENVELOPE_KEY).and_then(Value::as_str) else {
-            return Ok(false);
-        };
-        let payload = value.get("payload").cloned().unwrap_or(Value::Null);
         let mut sessions = self.sessions.lock();
-        match port {
-            "context" => {
-                let text = payload
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string();
+        // Accept both the legacy port names (`context`, `system_prompt`,
+        // `reset`, `barge_in`) AND the typed-RPC method names
+        // (`set_context`, `set_system_prompt`, `reset_history`). The
+        // legacy names dispatch by port; the typed-RPC names dispatch
+        // by method, with positional args carried in `payload.args`.
+        // This keeps the plugin compatible with both Rust coordinators
+        // (which use `wrap_aux_port` + legacy names) and Python clients
+        // emitting typed-RPC frames on the main port.
+        match port.as_str() {
+            "context" | "set_context" => {
+                let text = Self::payload_string(&payload);
                 for state in sessions.values_mut() {
                     state.context = text.clone();
                     state.turn_count = 0;
                 }
                 sessions.clear();
             }
-            "system_prompt" => {
-                let prompt = payload
-                    .get("text")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string();
+            "system_prompt" | "set_system_prompt" => {
+                let prompt = Self::payload_string(&payload);
                 for state in sessions.values_mut() {
                     state.system_prompt = prompt.clone();
                     state.turn_count = 0;
                 }
                 sessions.clear();
             }
-            "reset" => {
+            "reset" | "reset_history" => {
                 sessions.clear();
             }
             "barge_in" => {
