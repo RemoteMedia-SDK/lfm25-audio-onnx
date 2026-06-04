@@ -28,7 +28,7 @@ crate-type = ["cdylib"]
 # removed from the host's core crate without changing this plugin's
 # surface area.
 [dependencies]
-remotemedia-plugin-sdk = { git = "https://github.com/RemoteMedia-SDK/remotemedia-sdk.git", branch = "main" }
+remotemedia-plugin-sdk = { git = "https://github.com/RemoteMedia-SDK/remotemedia-plugin-sdk", branch = "main" }
 
 # `abi_stable` must be a direct dep so the attribute macros expanded by
 # `plugin_export!()` (`#[sabi_extern_fn]`, `#[export_root_module]`)
