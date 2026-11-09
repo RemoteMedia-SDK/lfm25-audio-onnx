@@ -11,7 +11,7 @@ on:
 
 jobs:
   release:
-    uses: RemoteMedia-SDK/remotemedia-sdk/.github/workflows/build-plugin.yml@main
+    uses: RemoteMedia-SDK/remotemedia-plugin-sdk/.github/workflows/build-plugin.yml@main
     with:
       crate-name:   lfm25-audio-onnx-plugin
       display-name: lfm25-audio-onnx
