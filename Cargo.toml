@@ -1,6 +1,6 @@
 [package]
 name = "lfm25-audio-onnx-plugin"
-version = "0.2.0"
+version = "0.5.0"
 edition = "2021"
 publish = false
 
@@ -28,7 +28,7 @@ crate-type = ["cdylib"]
 # removed from the host's core crate without changing this plugin's
 # surface area.
 [dependencies]
-remotemedia-plugin-sdk = { git = "https://github.com/RemoteMedia-SDK/remotemedia-plugin-sdk", branch = "main" }
+remotemedia-plugin-sdk = { git = "https://github.com/RemoteMedia-SDK/remotemedia-plugin-sdk", rev = "d6f90d98b433ca64b2e2b42ab27e6e079986d0b9" }
 
 # `abi_stable` must be a direct dep so the attribute macros expanded by
 # `plugin_export!()` (`#[sabi_extern_fn]`, `#[export_root_module]`)
